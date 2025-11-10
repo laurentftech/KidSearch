@@ -135,6 +135,14 @@
     } finally {
         // 4. Dispatch the event to signal that configuration is ready
         console.log("loader.js: 🚀 Dispatching 'apiConfigLoaded' event.");
+        
+        // DEBUG: Log the final Knowledge Panel configuration
+        if (window.CONFIG?.KNOWLEDGE_PANEL_CONFIG) {
+            console.log("🔍 FINAL KNOWLEDGE PANEL CONFIG:", JSON.stringify(window.CONFIG.KNOWLEDGE_PANEL_CONFIG, null, 2));
+        } else {
+            console.log("🔍 KNOWLEDGE_PANEL_CONFIG is not defined.");
+        }
+
         window.apiConfigLoaded = true; // Set global flag for compatibility
         window.dispatchEvent(new CustomEvent('apiConfigLoaded', {
             detail: { sources: window.CONFIG.API_SOURCES || [] }

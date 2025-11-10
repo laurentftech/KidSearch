@@ -245,10 +245,15 @@ class GenericApiSource {
     }
 
     async searchCustom(query, lang, options) {
-        const url = this.config.apiUrl
+        let url = this.config.apiUrl
             .replace('{query}', encodeURIComponent(query))
             .replace('{lang}', lang)
             .replace('{limit}', options.limit || this.config.resultsLimit || 5);
+
+        // Ajoute le paramètre use_hybrid si configuré
+        const useHybrid = this.config.use_hybrid || false;
+        const separator = url.includes('?') ? '&' : '?';
+        url += `${separator}use_hybrid=${useHybrid}`;
 
         const requestOptions = {
             method: this.config.method || 'GET',

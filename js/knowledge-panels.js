@@ -25,13 +25,16 @@ async function tryDisplayKnowledgePanel(query) {
 
     try {
         // Recherche la page correspondante - demande 3 résultats pour choisir le meilleur
-        const searchUrl = new URL(apiUrl);
+        const searchUrl = new URL(apiUrl, window.location.origin);
         searchUrl.searchParams.set('action', 'query');
         searchUrl.searchParams.set('format', 'json');
         searchUrl.searchParams.set('list', 'search');
         searchUrl.searchParams.set('srsearch', query);
         searchUrl.searchParams.set('srlimit', '3');
         searchUrl.searchParams.set('origin', '*');
+
+        // DEBUG: Log the URL being fetched
+        console.log(`🔍 Fetching Knowledge Panel search from: ${searchUrl.toString()}`);
 
         const searchResponse = await fetch(searchUrl);
         const searchData = await searchResponse.json();
@@ -49,7 +52,7 @@ async function tryDisplayKnowledgePanel(query) {
         const pageTitle = bestMatch.title;
 
         // Récupère l'extrait et l'image
-        const pageUrl = new URL(apiUrl);
+        const pageUrl = new URL(apiUrl, window.location.origin);
         pageUrl.searchParams.set('action', 'query');
         pageUrl.searchParams.set('format', 'json');
         pageUrl.searchParams.set('prop', 'extracts|pageimages');
@@ -60,6 +63,9 @@ async function tryDisplayKnowledgePanel(query) {
         pageUrl.searchParams.set('pithumbsize', config.THUMBNAIL_SIZE || 300);
         pageUrl.searchParams.set('titles', pageTitle);
         pageUrl.searchParams.set('origin', '*');
+        
+        // DEBUG: Log the URL being fetched
+        console.log(`🔍 Fetching Knowledge Panel details from: ${pageUrl.toString()}`);
 
         const pageResponse = await fetch(pageUrl);
         const pageData = await pageResponse.json();
