@@ -89,6 +89,39 @@ class ApiQuotaManager {
 
 // ==================== SYSTÈME GÉNÉRIQUE D'API ====================
 
+/**
+ * HOTFIX for Vikidia image URLs.
+ * The API returns insecure (HTTP) URLs pointing to download.vikidia.org.
+ * These URLs are automatically upgraded to HTTPS by the browser, but the server
+ * returns a 403 Forbidden error, likely due to hotlink protection.
+ * The correct, working URLs are on the main language-specific domain (e.g., fr.vikidia.org)
+ * under the /w/images/ path.
+ * @param {string} url The original image URL.
+ * @returns {string} The corrected HTTPS URL or the original URL if no fix was needed.
+ */
+function fixVikidiaImageUrl(url) {
+    if (typeof url !== 'string' || !url.includes('download.vikidia.org')) {
+        return url;
+    }
+    try {
+        // Use a base URL to handle protocol-relative URLs like //download.vikidia.org/...
+        const urlObj = new URL(url, window.location.origin);
+        if (urlObj.hostname === 'download.vikidia.org' && urlObj.pathname.startsWith('/vikidia/')) {
+            const parts = urlObj.pathname.split('/'); // e.g., ["", "vikidia", "fr", "images", "2", "2f", "Trafalgar1.jpg"]
+            if (parts.length > 4 && parts[3] === 'images') {
+                const lang = parts[2];
+                const imagePath = parts.slice(4).join('/');
+                return `https://${lang}.vikidia.org/w/images/${imagePath}`;
+            }
+        }
+    } catch (e) {
+        // Not a valid URL, or some other error. Return original.
+        console.warn('Could not parse URL for Vikidia fix:', url, e);
+    }
+    return url;
+}
+
+
 class GenericApiSource {
     constructor(config) {
         this.id = config.id;
@@ -159,7 +192,7 @@ class GenericApiSource {
             const thumbData = await (await fetch(thumbUrl)).json();
             if (thumbData.query?.pages) {
                 Object.values(thumbData.query.pages).forEach(p => {
-                    if (p.thumbnail) thumbMap[p.title] = p.thumbnail.source;
+                    if (p.thumbnail) thumbMap[p.title] = fixVikidiaImageUrl(p.thumbnail.source);
                 });
             }
         }
@@ -404,13 +437,13 @@ class GenericApiSource {
                 const img = p.imageinfo[0];
                 return {
                     title: p.title.replace('File:', '').replace(/\.[^/.]+$/, ""),
-                    link: img.url,
+                    link: fixVikidiaImageUrl(img.url),
                     displayLink: new URL(baseUrl).hostname,
                     source: this.name,
                     weight: this.weight,
                     image: {
                         contextLink: img.descriptionurl,
-                        thumbnailLink: img.thumburl,
+                        thumbnailLink: fixVikidiaImageUrl(img.thumburl),
                         width: img.thumbwidth,
                         height: img.thumbheight
                     }
@@ -906,7 +939,7 @@ function initializeSearch() {
         div.className = 'image-result';
         div.onclick = () => openImageModal(item);
 
-        const imgUrl = item.link || item.image?.thumbnailLink || '';
+        const imgUrl = fixVikidiaImageUrl(item.link || item.image?.thumbnailLink || '');
         const width = item.image?.width || 0;
         const height = item.image?.height || 0;
         const aspectRatio = width && height ? width / height : 1;
@@ -1008,7 +1041,7 @@ function initializeSearch() {
     }
 
     function openImageModal(item) {
-        modalImage.src = item.link || item.image?.contextLink || '';
+        modalImage.src = fixVikidiaImageUrl(item.link || '');
         modalTitle.textContent = item.title || '';
         modalSource.innerHTML = item.image?.contextLink ? `<a href="${item.image.contextLink}" target="_blank" rel="noopener noreferrer">${item.displayLink || item.image.contextLink}</a>` : (item.displayLink || '');
         modalDimensions.textContent = item.image ? `${item.image.width} × ${item.image.height} pixels` : '';
@@ -1143,4 +1176,3 @@ if (window.apiConfigLoaded) {
     console.log("search.js: ⏳ Configuration API non prête. En attente de l'événement \'apiConfigLoaded\'.");
     window.addEventListener('apiConfigLoaded', initializeSearch, { once: true });
 }
-''
