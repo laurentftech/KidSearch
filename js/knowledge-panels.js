@@ -1,6 +1,38 @@
 // knowledge-panels.js - Version corrigée avec vérification CONFIG
 // Affiche un panneau de connaissances pour certaines requêtes
 
+/**
+ * HOTFIX for Vikidia image URLs.
+ * The API returns insecure (HTTP) URLs pointing to download.vikidia.org.
+ * These URLs are automatically upgraded to HTTPS by the browser, but the server
+ * returns a 403 Forbidden error, likely due to hotlink protection.
+ * The correct, working URLs are on the main language-specific domain (e.g., fr.vikidia.org)
+ * under the /w/images/ path.
+ * @param {string} url The original image URL.
+ * @returns {string} The corrected HTTPS URL or the original URL if no fix was needed.
+ */
+function fixVikidiaImageUrl(url) {
+    if (typeof url !== 'string' || !url.includes('download.vikidia.org')) {
+        return url;
+    }
+    try {
+        // Use a base URL to handle protocol-relative URLs like //download.vikidia.org/...
+        const urlObj = new URL(url, window.location.origin);
+        if (urlObj.hostname === 'download.vikidia.org' && urlObj.pathname.startsWith('/vikidia/')) {
+            const parts = urlObj.pathname.split('/'); // e.g., ["", "vikidia", "fr", "images", "2", "2f", "Trafalgar1.jpg"]
+            if (parts.length > 4 && parts[3] === 'images') {
+                const lang = parts[2];
+                const imagePath = parts.slice(4).join('/');
+                return `https://${lang}.vikidia.org/w/images/${imagePath}`;
+            }
+        }
+    } catch (e) {
+        // Not a valid URL, or some other error. Return original.
+        console.warn('Could not parse URL for Vikidia fix:', url, e);
+    }
+    return url;
+}
+
 async function tryDisplayKnowledgePanel(query) {
     // Vérification que CONFIG existe
     if (typeof CONFIG === 'undefined') {
@@ -10,7 +42,7 @@ async function tryDisplayKnowledgePanel(query) {
 
     // Vérifie si les panneaux de connaissances sont activés
     if (!CONFIG.KNOWLEDGE_PANEL_CONFIG?.ENABLED) {
-        return;
+        return; // Panneau de connaissances désactivé
     }
 
     const config = CONFIG.KNOWLEDGE_PANEL_CONFIG;
@@ -76,11 +108,14 @@ async function tryDisplayKnowledgePanel(query) {
             return; // Pas d'extrait disponible
         }
 
+        // Applique fixVikidiaImageUrl à l'URL de la miniature si elle existe
+        const thumbnailUrl = config.DISABLE_THUMBNAILS ? null : (page.thumbnail?.source ? fixVikidiaImageUrl(page.thumbnail.source) : null);
+
         // Crée le panneau
         displayKnowledgePanel({
             title: pageTitle,
             extract: page.extract,
-            thumbnail: config.DISABLE_THUMBNAILS ? null : page.thumbnail?.source,
+            thumbnail: thumbnailUrl,
             url: `${baseUrl}${encodeURIComponent(pageTitle.replace(/ /g, '_'))}`,
             source: config.SOURCE_NAME || 'Vikidia'
         });
