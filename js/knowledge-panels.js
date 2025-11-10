@@ -145,9 +145,9 @@ function displayKnowledgePanel(data) {
         extract = extract.substring(0, maxLength) + '...';
     }
 
-    // Construction du HTML
+    // Construction du HTML avec referrerpolicy="no-referrer"
     const thumbnailHTML = data.thumbnail
-        ? `<div class="panel-thumbnail"><img src="${data.thumbnail}" alt="${data.title}"></div>`
+        ? `<div class="panel-thumbnail"><img src="${data.thumbnail}" alt="${data.title}" referrerpolicy="no-referrer"></div>`
         : '';
 
     panel.innerHTML = `

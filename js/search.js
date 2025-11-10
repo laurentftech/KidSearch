@@ -104,18 +104,16 @@ function fixVikidiaImageUrl(url) {
         return url;
     }
     try {
-        // Use a base URL to handle protocol-relative URLs like //download.vikidia.org/...
-        const urlObj = new URL(url, window.location.origin);
-        if (urlObj.hostname === 'download.vikidia.org' && urlObj.pathname.startsWith('/vikidia/')) {
-            const parts = urlObj.pathname.split('/'); // e.g., ["", "vikidia", "fr", "images", "2", "2f", "Trafalgar1.jpg"]
-            if (parts.length > 4 && parts[3] === 'images') {
-                const lang = parts[2];
-                const imagePath = parts.slice(4).join('/');
+        const urlObj = new URL(url);
+        if (urlObj.hostname === 'download.vikidia.org') {
+            const pathParts = urlObj.pathname.split('/');
+            if (pathParts[1] === 'vikidia' && pathParts[3] === 'images') {
+                const lang = pathParts[2];
+                const imagePath = pathParts.slice(4).join('/');
                 return `https://${lang}.vikidia.org/w/images/${imagePath}`;
             }
         }
     } catch (e) {
-        // Not a valid URL, or some other error. Return original.
         console.warn('Could not parse URL for Vikidia fix:', url, e);
     }
     return url;
@@ -270,7 +268,7 @@ class GenericApiSource {
             };
 
             if (hit.images?.[0]?.url) {
-                result.pagemap = { cse_thumbnail: [{ src: hit.images[0].url }] };
+                result.pagemap = { cse_thumbnail: [{ src: fixVikidiaImageUrl(hit.images[0].url) }] };
             }
 
             return result;
@@ -363,7 +361,7 @@ class GenericApiSource {
             // Handle images if present (from backend API)
             if (item.images && item.images.length > 0 && item.images[0].url) {
                 result.pagemap = {
-                    cse_thumbnail: [{ src: item.images[0].url }]
+                    cse_thumbnail: [{ src: fixVikidiaImageUrl(item.images[0].url) }]
                 };
             }
 
@@ -470,13 +468,13 @@ class GenericApiSource {
                 const img = h.images[0];
                 return {
                     title: h.title,
-                    link: img.url,
+                    link: fixVikidiaImageUrl(img.url),
                     displayLink: new URL(h.url).hostname,
                     source: this.name,
                     weight: this.weight,
                     image: {
                         contextLink: h.url,
-                        thumbnailLink: img.url,
+                        thumbnailLink: fixVikidiaImageUrl(img.url),
                         width: img.width || 400,
                         height: img.height || 300
                     }
@@ -921,7 +919,7 @@ function initializeSearch() {
         const resultDiv = document.createElement('div');
         resultDiv.className = 'search-result';
         const thumbnailSrc = item.pagemap?.cse_thumbnail?.[0]?.src;
-        const thumbnail = thumbnailSrc ? `<img src="${thumbnailSrc}" alt="">` : '';
+        const thumbnail = thumbnailSrc ? `<img src="${thumbnailSrc}" alt="" referrerpolicy="no-referrer">` : '';
 
         resultDiv.innerHTML = `
           <div class="result-thumbnail">${thumbnail}</div>
@@ -954,6 +952,7 @@ function initializeSearch() {
         img.src = imgUrl;
         img.alt = item.title || '';
         img.loading = 'lazy';
+        img.referrerPolicy = 'no-referrer';
         img.style.cssText = `width:100%; height:100%; object-fit:cover; display:block; border-radius:8px;`;
         img.onerror = () => { div.style.display = 'none'; };
 
@@ -1042,6 +1041,7 @@ function initializeSearch() {
 
     function openImageModal(item) {
         modalImage.src = fixVikidiaImageUrl(item.link || '');
+        modalImage.referrerPolicy = 'no-referrer';
         modalTitle.textContent = item.title || '';
         modalSource.innerHTML = item.image?.contextLink ? `<a href="${item.image.contextLink}" target="_blank" rel="noopener noreferrer">${item.displayLink || item.image.contextLink}</a>` : (item.displayLink || '');
         modalDimensions.textContent = item.image ? `${item.image.width} × ${item.image.height} pixels` : '';
