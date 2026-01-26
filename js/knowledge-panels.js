@@ -19,64 +19,39 @@ async function tryDisplayKnowledgePanel(query) {
     const queryLang = detectQueryLanguage(query);
     const lang = queryLang || (typeof i18n !== 'undefined' ? i18n.getLang() : 'fr');
 
-    // Remplace {lang} dans les URLs
-    const apiUrl = config.API_URL.replace('{lang}', lang);
-    const baseUrl = config.BASE_URL.replace('{lang}', lang);
-
     try {
-        // Recherche la page correspondante - demande 3 résultats pour choisir le meilleur
-        const searchUrl = new URL(apiUrl);
-        searchUrl.searchParams.set('action', 'query');
-        searchUrl.searchParams.set('format', 'json');
-        searchUrl.searchParams.set('list', 'search');
-        searchUrl.searchParams.set('srsearch', query);
-        searchUrl.searchParams.set('srlimit', '3');
-        searchUrl.searchParams.set('origin', '*');
+        // Use KidSearch backend API instead of direct MediaWiki API calls
+        // This avoids CORS and CloudFlare blocking issues
+        const backendUrl = config.BACKEND_URL || 'http://localhost:8082/api';
+        const apiUrl = new URL(`${backendUrl}/knowledge-panel`);
+        apiUrl.searchParams.set('q', query);
+        apiUrl.searchParams.set('lang', lang);
 
-        const searchResponse = await fetch(searchUrl);
-        const searchData = await searchResponse.json();
+        const response = await fetch(apiUrl);
 
-        if (!searchData.query?.search?.length) {
-            return; // Aucun résultat
+        // If not found (404) or error, silently return
+        if (!response.ok) {
+            if (response.status === 404) {
+                console.log('No knowledge panel found for query:', query);
+            } else {
+                console.warn('Knowledge panel API error:', response.status);
+            }
+            return;
         }
 
-        // Trouve le résultat le plus pertinent
-        const bestMatch = findBestMatch(query, searchData.query.search);
-        if (!bestMatch) {
-            return; // Pas de correspondance pertinente
+        const data = await response.json();
+
+        if (!data.extract) {
+            return; // No extract available
         }
 
-        const pageTitle = bestMatch.title;
-
-        // Récupère l'extrait et l'image
-        const pageUrl = new URL(apiUrl);
-        pageUrl.searchParams.set('action', 'query');
-        pageUrl.searchParams.set('format', 'json');
-        pageUrl.searchParams.set('prop', 'extracts|pageimages');
-        pageUrl.searchParams.set('exintro', '1');
-        pageUrl.searchParams.set('explaintext', '1');
-        pageUrl.searchParams.set('exsentences', '3');
-        pageUrl.searchParams.set('piprop', 'thumbnail');
-        pageUrl.searchParams.set('pithumbsize', config.THUMBNAIL_SIZE || 300);
-        pageUrl.searchParams.set('titles', pageTitle);
-        pageUrl.searchParams.set('origin', '*');
-
-        const pageResponse = await fetch(pageUrl);
-        const pageData = await pageResponse.json();
-
-        const page = Object.values(pageData.query.pages)[0];
-
-        if (!page.extract) {
-            return; // Pas d'extrait disponible
-        }
-
-        // Crée le panneau
+        // Display the panel
         displayKnowledgePanel({
-            title: pageTitle,
-            extract: page.extract,
-            thumbnail: config.DISABLE_THUMBNAILS ? null : page.thumbnail?.source,
-            url: `${baseUrl}${encodeURIComponent(pageTitle.replace(/ /g, '_'))}`,
-            source: config.SOURCE_NAME || 'Vikidia'
+            title: data.title,
+            extract: data.extract,
+            thumbnail: config.DISABLE_THUMBNAILS ? null : data.thumbnail,
+            url: data.url,
+            source: data.source
         });
 
     } catch (error) {

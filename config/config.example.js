@@ -37,6 +37,9 @@ const CONFIG = {
     KNOWLEDGE_PANEL_CONFIG: {
         // --- Configuration pour Vikidia (par défaut) ---
         ENABLED: true,
+        // URL du backend KidSearch API (recommandé - évite CORS et erreurs 403)
+        BACKEND_URL: 'http://localhost:8082/api',  // Changez pour votre URL de production
+        // Paramètres de configuration (conservés pour référence)
         API_URL: 'https://{lang}.vikidia.org/w/api.php',      // {lang} sera remplacé par 'fr' ou 'en'
         BASE_URL: 'https://{lang}.vikidia.org/wiki/',
         SOURCE_NAME: "Vikidia - L'encyclopédie des 8-13 ans",
