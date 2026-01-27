@@ -46,6 +46,7 @@ async function tryDisplayKnowledgePanel(query) {
         }
 
         // Display the panel
+        console.log('Knowledge panel data received:', data);
         displayKnowledgePanel({
             title: data.title,
             extract: data.extract,
@@ -80,6 +81,7 @@ function displayKnowledgePanel(data) {
     }
 
     // Construction du HTML
+    console.log('Rendering panel with thumbnail:', data.thumbnail);
     const thumbnailHTML = data.thumbnail
         ? `<div class="panel-thumbnail"><img src="${data.thumbnail}" alt="${data.title}"></div>`
         : '';
@@ -97,6 +99,17 @@ function displayKnowledgePanel(data) {
             </div>
         </div>
     `;
+
+    // Gestion de l'erreur de chargement de l'image (alternative à l'attribut onerror obsolète)
+    if (data.thumbnail) {
+        const img = panel.querySelector('.panel-thumbnail img');
+        if (img) {
+            img.addEventListener('error', function() {
+                this.style.display = 'none';
+                console.warn('Failed to load knowledge panel thumbnail:', data.thumbnail);
+            });
+        }
+    }
 
     // Animation d'apparition
     panel.style.opacity = '0';
@@ -233,6 +246,7 @@ if (typeof document !== 'undefined') {
 
         .panel-thumbnail {
             flex-shrink: 0;
+            display: block !important;
         }
 
         .panel-thumbnail img {
@@ -240,6 +254,7 @@ if (typeof document !== 'undefined') {
             height: 150px;
             object-fit: cover;
             border-radius: 8px;
+            display: block !important;
         }
 
         .panel-content {
@@ -293,6 +308,7 @@ if (typeof document !== 'undefined') {
                 width: 100%;
                 height: auto;
                 max-height: 200px;
+                display: block !important;
             }
         }
     `;
