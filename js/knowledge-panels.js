@@ -27,8 +27,6 @@ async function tryDisplayKnowledgePanel(query) {
         apiUrl.searchParams.set('q', query);
         apiUrl.searchParams.set('lang', lang);
 
-        console.log('🔍 Fetching Knowledge Panel details from:', apiUrl.toString());
-
         const response = await fetch(apiUrl);
 
         // If not found (404) or error, silently return
@@ -42,15 +40,6 @@ async function tryDisplayKnowledgePanel(query) {
         }
 
         const data = await response.json();
-
-        if (!data.extract) {
-            return; // No extract available
-        }
-
-    // Display the panel
-    console.log('Knowledge panel data received:', JSON.stringify(data, null, 2));
-    console.log('Thumbnail URL:', data.thumbnail);
-    console.log('Thumbnails disabled in config:', config.DISABLE_THUMBNAILS);
 
     displayKnowledgePanel({
         title: data.title,
@@ -86,7 +75,6 @@ function displayKnowledgePanel(data) {
     }
 
     // Construction du HTML
-    console.log('Final thumbnail URL being rendered:', data.thumbnail);
     const thumbnailHTML = data.thumbnail
         ? `<div class="panel-thumbnail"><img src="${data.thumbnail}" alt="${data.title}" style="display: block !important;"></div>`
         : '';
@@ -105,14 +93,12 @@ function displayKnowledgePanel(data) {
         </div>
     `;
 
-    // Gestion de l'erreur de chargement de l'image (alternative à l'attribut onerror obsolète)
     if (data.thumbnail) {
         const img = panel.querySelector('.panel-thumbnail img');
         if (img) {
             img.addEventListener('error', function() {
                 this.style.display = 'none';
-                console.error('IMAGE LOAD ERROR: Failed to load thumbnail:', data.thumbnail);
-                console.log('Image element:', this);
+                console.warn('Failed to load knowledge panel thumbnail:', data.thumbnail);
             });
         }
     }
@@ -210,8 +196,6 @@ function findBestMatch(query, searchResults) {
     });
 
     scored.sort((a, b) => b.score - a.score);
-
-    console.log('Knowledge panel scores:', scored.map(s => `${s.result.title}: ${s.score}`).join(', '));
 
     // Ne garde que si le score est suffisant (au moins 15 points)
     // Pour "Dassault Rafale", si le meilleur résultat est "tempête" avec un score < 15, on refuse
