@@ -23,7 +23,9 @@ async function tryDisplayKnowledgePanel(query) {
         // Use KidSearch backend API instead of direct MediaWiki API calls
         // This avoids CORS and CloudFlare blocking issues
         const backendUrl = config.BACKEND_URL || 'http://localhost:8082/api';
-        const apiUrl = new URL(`${backendUrl}/knowledge-panel`);
+        // Support relative URLs by providing a base (window.location.origin)
+        // If backendUrl is absolute, the base is ignored.
+        const apiUrl = new URL(`${backendUrl}/knowledge-panel`, window.location.origin);
         apiUrl.searchParams.set('q', query);
         apiUrl.searchParams.set('lang', lang);
 
