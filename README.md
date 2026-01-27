@@ -1,8 +1,8 @@
-[![Live Demo](https://img.shields.io/badge/Live_Demo-4285F4?style=flat&logo=google-chrome&logoColor=white)](https://laurentftech.github.io/kidsearch) [![Buy Me a Coffee](https://img.shields.io/badge/Buy_Me_a_Coffee-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=000000)](https://www.buymeacoffee.com/laurentftech)
+[![Live Demo](https://img.shields.io/badge/Live_Demo-4285F4?style=flat&logo=google-chrome&logoColor=white)](https://laurentftech.github.io/KidSearch) [![Buy Me a Coffee](https://img.shields.io/badge/Buy_Me_a_Coffee-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=000000)](https://www.buymeacoffee.com/laurentftech)
 
 # KidSearch 🔍
 
-**[➡️ Try the Live Demo!](https://laurentftech.github.io/kidsearch)**
+**[➡️ Try the Live Demo!](https://laurentftech.github.io/KidSearch)**
 
 A secure and educational search engine designed for children, using Google Custom Search Engine with filtered results and knowledge panels powered by Vikidia.
 

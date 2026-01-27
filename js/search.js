@@ -89,6 +89,37 @@ class ApiQuotaManager {
 
 // ==================== SYSTÈME GÉNÉRIQUE D'API ====================
 
+/**
+ * HOTFIX for Vikidia image URLs.
+ * The API returns insecure (HTTP) URLs pointing to download.vikidia.org.
+ * These URLs are automatically upgraded to HTTPS by the browser, but the server
+ * returns a 403 Forbidden error, likely due to hotlink protection.
+ * The correct, working URLs are on the main language-specific domain (e.g., fr.vikidia.org)
+ * under the /w/images/ path.
+ * @param {string} url The original image URL.
+ * @returns {string} The corrected HTTPS URL or the original URL if no fix was needed.
+ */
+function fixVikidiaImageUrl(url) {
+    if (typeof url !== 'string' || !url.includes('download.vikidia.org')) {
+        return url;
+    }
+    try {
+        const urlObj = new URL(url);
+        if (urlObj.hostname === 'download.vikidia.org') {
+            const pathParts = urlObj.pathname.split('/');
+            if (pathParts[1] === 'vikidia' && pathParts[3] === 'images') {
+                const lang = pathParts[2];
+                const imagePath = pathParts.slice(4).join('/');
+                return `https://${lang}.vikidia.org/w/images/${imagePath}`;
+            }
+        }
+    } catch (e) {
+        console.warn('Could not parse URL for Vikidia fix:', url, e);
+    }
+    return url;
+}
+
+
 class GenericApiSource {
     constructor(config) {
         this.id = config.id;
@@ -159,7 +190,7 @@ class GenericApiSource {
             const thumbData = await (await fetch(thumbUrl)).json();
             if (thumbData.query?.pages) {
                 Object.values(thumbData.query.pages).forEach(p => {
-                    if (p.thumbnail) thumbMap[p.title] = p.thumbnail.source;
+                    if (p.thumbnail) thumbMap[p.title] = fixVikidiaImageUrl(p.thumbnail.source);
                 });
             }
         }
@@ -237,7 +268,7 @@ class GenericApiSource {
             };
 
             if (hit.images?.[0]?.url) {
-                result.pagemap = { cse_thumbnail: [{ src: hit.images[0].url }] };
+                result.pagemap = { cse_thumbnail: [{ src: fixVikidiaImageUrl(hit.images[0].url) }] };
             }
 
             return result;
@@ -245,10 +276,15 @@ class GenericApiSource {
     }
 
     async searchCustom(query, lang, options) {
-        const url = this.config.apiUrl
+        let url = this.config.apiUrl
             .replace('{query}', encodeURIComponent(query))
             .replace('{lang}', lang)
             .replace('{limit}', options.limit || this.config.resultsLimit || 5);
+
+        // Ajoute le paramètre use_hybrid si configuré
+        const useHybrid = this.config.use_hybrid || false;
+        const separator = url.includes('?') ? '&' : '?';
+        url += `${separator}use_hybrid=${useHybrid}`;
 
         const requestOptions = {
             method: this.config.method || 'GET',
@@ -279,18 +315,24 @@ class GenericApiSource {
         return items.map(item => {
             // Clean wiki markup from excerpt/snippet
             let cleanedSnippet = (item[this.config.snippetField || 'snippet'] || '')
-                // Remove wiki templates like {{Template|...}} (non-greedy)
-                .replace(/\{\{.*?\}\}/g, '')
+                // Remove wiki templates like {{Template|...}} and {{Unité|value|unit}}
+                .replace(/\{\{[^}]*\}\}/g, '')
                 // Remove wiki links [[Link|Text]] -> Text or [[Text]] -> Text
                 .replace(/\[\[(?:[^|\]]+\|)?([^\]]+)\]\]/g, '$1')
                 // Remove bold/italic markup
                 .replace(/'''([^']+)'''/g, '$1')
                 .replace(/''([^']+)''/g, '$1')
                 // Remove file references and thumbnails
-                .replace(/\[\[Fichier:[^\]]+\]\]/g, '')
+                .replace(/\[\[(?:Fichier|File|Image):[^\]]+\]\]/gi, '')
                 .replace(/thumb\|[^\]]+/g, '')
+                // Remove HTML tags (like <span>)
+                .replace(/<[^>]+>/g, '')
+                // Remove wiki section markers
+                .replace(/={2,}\s*([^=]+)\s*={2,}/g, '$1')
                 // Remove remaining brackets from incomplete markup
-                .replace(/\[\[|\]\]/g, '')
+                .replace(/\[\[|\]\]|\[|\]/g, '')
+                // Remove pipe characters that are leftover from templates
+                .replace(/\|\s*/g, ' ')
                 // Clean up whitespace
                 .trim().replace(/\s+/g, ' ');
 
@@ -319,7 +361,7 @@ class GenericApiSource {
             // Handle images if present (from backend API)
             if (item.images && item.images.length > 0 && item.images[0].url) {
                 result.pagemap = {
-                    cse_thumbnail: [{ src: item.images[0].url }]
+                    cse_thumbnail: [{ src: fixVikidiaImageUrl(item.images[0].url) }]
                 };
             }
 
@@ -393,13 +435,13 @@ class GenericApiSource {
                 const img = p.imageinfo[0];
                 return {
                     title: p.title.replace('File:', '').replace(/\.[^/.]+$/, ""),
-                    link: img.url,
+                    link: fixVikidiaImageUrl(img.url),
                     displayLink: new URL(baseUrl).hostname,
                     source: this.name,
                     weight: this.weight,
                     image: {
                         contextLink: img.descriptionurl,
-                        thumbnailLink: img.thumburl,
+                        thumbnailLink: fixVikidiaImageUrl(img.thumburl),
                         width: img.thumbwidth,
                         height: img.thumbheight
                     }
@@ -426,13 +468,13 @@ class GenericApiSource {
                 const img = h.images[0];
                 return {
                     title: h.title,
-                    link: img.url,
+                    link: fixVikidiaImageUrl(img.url),
                     displayLink: new URL(h.url).hostname,
                     source: this.name,
                     weight: this.weight,
                     image: {
                         contextLink: h.url,
-                        thumbnailLink: img.url,
+                        thumbnailLink: fixVikidiaImageUrl(img.url),
                         width: img.width || 400,
                         height: img.height || 300
                     }
@@ -877,7 +919,7 @@ function initializeSearch() {
         const resultDiv = document.createElement('div');
         resultDiv.className = 'search-result';
         const thumbnailSrc = item.pagemap?.cse_thumbnail?.[0]?.src;
-        const thumbnail = thumbnailSrc ? `<img src="${thumbnailSrc}" alt="">` : '';
+        const thumbnail = thumbnailSrc ? `<img src="${thumbnailSrc}" alt="" referrerpolicy="no-referrer">` : '';
 
         resultDiv.innerHTML = `
           <div class="result-thumbnail">${thumbnail}</div>
@@ -895,7 +937,7 @@ function initializeSearch() {
         div.className = 'image-result';
         div.onclick = () => openImageModal(item);
 
-        const imgUrl = item.link || item.image?.thumbnailLink || '';
+        const imgUrl = fixVikidiaImageUrl(item.link || item.image?.thumbnailLink || '');
         const width = item.image?.width || 0;
         const height = item.image?.height || 0;
         const aspectRatio = width && height ? width / height : 1;
@@ -910,6 +952,7 @@ function initializeSearch() {
         img.src = imgUrl;
         img.alt = item.title || '';
         img.loading = 'lazy';
+        img.referrerPolicy = 'no-referrer';
         img.style.cssText = `width:100%; height:100%; object-fit:cover; display:block; border-radius:8px;`;
         img.onerror = () => { div.style.display = 'none'; };
 
@@ -997,7 +1040,8 @@ function initializeSearch() {
     }
 
     function openImageModal(item) {
-        modalImage.src = item.link || item.image?.contextLink || '';
+        modalImage.src = fixVikidiaImageUrl(item.link || '');
+        modalImage.referrerPolicy = 'no-referrer';
         modalTitle.textContent = item.title || '';
         modalSource.innerHTML = item.image?.contextLink ? `<a href="${item.image.contextLink}" target="_blank" rel="noopener noreferrer">${item.displayLink || item.image.contextLink}</a>` : (item.displayLink || '');
         modalDimensions.textContent = item.image ? `${item.image.width} × ${item.image.height} pixels` : '';
@@ -1132,4 +1176,3 @@ if (window.apiConfigLoaded) {
     console.log("search.js: ⏳ Configuration API non prête. En attente de l'événement \'apiConfigLoaded\'.");
     window.addEventListener('apiConfigLoaded', initializeSearch, { once: true });
 }
-''
