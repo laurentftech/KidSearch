@@ -147,7 +147,7 @@ search-for-kids/
 
 ### Meilisearch Integration
 - You can add your own Meilisearch instance to include custom results in your search engine.
-- To populate your instance, you can use the companion project [MeilisearchCrawler](https://github.com/laurentftech/MeilisearchCrawler), a web crawler designed to index content for Meilisearch.
+- To populate your instance, you can use the companion project [KidSearchBackend](https://github.com/laurentftech/KidSearch-Backend), a web crawler designed to index content for Meilisearch.
 
 ## Customization
 
