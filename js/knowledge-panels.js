@@ -20,40 +20,103 @@ async function tryDisplayKnowledgePanel(query) {
     const lang = queryLang || (typeof i18n !== 'undefined' ? i18n.getLang() : 'fr');
 
     try {
-        // Use KidSearch backend API instead of direct MediaWiki API calls
-        // This avoids CORS and CloudFlare blocking issues
-        const backendUrl = config.BACKEND_URL || 'http://localhost:8082/api';
-        // Support relative URLs by providing a base (window.location.origin)
-        // If backendUrl is absolute, the base is ignored.
-        const apiUrl = new URL(`${backendUrl}/knowledge-panel`, window.location.origin);
-        apiUrl.searchParams.set('q', query);
-        apiUrl.searchParams.set('lang', lang);
+        const backendUrl = config.BACKEND_URL;
 
-        const response = await fetch(apiUrl);
+        if (backendUrl) {
+            // Priorité : backend API (évite CORS/CloudFlare)
+            const apiUrl = new URL(`${backendUrl}/knowledge-panel`);
+            apiUrl.searchParams.set('q', query);
+            apiUrl.searchParams.set('lang', lang);
 
-        // If not found (404) or error, silently return
-        if (!response.ok) {
-            if (response.status === 404) {
-                console.log('No knowledge panel found for query:', query);
-            } else {
-                console.warn('Knowledge panel API error:', response.status);
+            const response = await fetch(apiUrl);
+
+            if (!response.ok) {
+                if (response.status === 404) {
+                    console.log('No knowledge panel found for query:', query);
+                } else {
+                    console.warn('Knowledge panel API error:', response.status);
+                }
+                return;
             }
-            return;
+
+            const data = await response.json();
+            displayKnowledgePanel({
+                title: data.title,
+                extract: data.extract,
+                thumbnail: config.DISABLE_THUMBNAILS ? null : data.thumbnail,
+                url: data.url,
+                source: data.source
+            });
+        } else {
+            // Fallback : appels directs MediaWiki (Vikidia/Wikipedia)
+            await tryDisplayKnowledgePanelDirect(query, config, lang);
         }
-
-        const data = await response.json();
-
-    displayKnowledgePanel({
-        title: data.title,
-        extract: data.extract,
-        thumbnail: config.DISABLE_THUMBNAILS ? null : data.thumbnail,
-        url: data.url,
-        source: data.source
-    });
-
     } catch (error) {
         console.error('Erreur lors de la création du panneau de connaissances:', error);
     }
+}
+
+// Fallback : appels directs à l'API MediaWiki quand BACKEND_URL n'est pas configuré
+async function tryDisplayKnowledgePanelDirect(query, config, lang) {
+    const apiUrlTemplate = config.API_URL;
+    if (!apiUrlTemplate) return;
+
+    const apiUrl = apiUrlTemplate.replace('{lang}', lang);
+    const baseUrl = (config.BASE_URL || '').replace('{lang}', lang);
+
+    // Étape 1 : recherche des candidats
+    const searchUrl = new URL(apiUrl);
+    searchUrl.searchParams.set('action', 'query');
+    searchUrl.searchParams.set('list', 'search');
+    searchUrl.searchParams.set('srsearch', query);
+    searchUrl.searchParams.set('srlimit', '3');
+    searchUrl.searchParams.set('format', 'json');
+    searchUrl.searchParams.set('origin', '*');
+
+    const searchResponse = await fetch(searchUrl);
+    if (!searchResponse.ok) return;
+
+    const searchData = await searchResponse.json();
+    const searchResults = (searchData.query?.search || []).map(r => ({
+        title: r.title,
+        snippet: r.snippet?.replace(/<[^>]+>/g, '') || ''
+    }));
+
+    const best = findBestMatch(query, searchResults);
+    if (!best) return;
+
+    // Étape 2 : extrait + miniature pour le meilleur résultat
+    const detailUrl = new URL(apiUrl);
+    detailUrl.searchParams.set('action', 'query');
+    detailUrl.searchParams.set('prop', 'extracts|pageimages');
+    detailUrl.searchParams.set('titles', best.title);
+    detailUrl.searchParams.set('exintro', 'true');
+    detailUrl.searchParams.set('explaintext', 'true');
+    detailUrl.searchParams.set('pithumbsize', String(config.THUMBNAIL_SIZE || 300));
+    detailUrl.searchParams.set('format', 'json');
+    detailUrl.searchParams.set('origin', '*');
+
+    const detailResponse = await fetch(detailUrl);
+    if (!detailResponse.ok) return;
+
+    const detailData = await detailResponse.json();
+    const pages = detailData.query?.pages || {};
+    const page = Object.values(pages)[0];
+    if (!page || page.missing !== undefined) return;
+
+    const extract = page.extract || '';
+    if (!extract) return;
+
+    const thumbnail = config.DISABLE_THUMBNAILS ? null : (page.thumbnail?.source || null);
+    const articleUrl = baseUrl + encodeURIComponent(best.title.replace(/ /g, '_'));
+
+    displayKnowledgePanel({
+        title: best.title,
+        extract: extract,
+        thumbnail: thumbnail,
+        url: articleUrl,
+        source: config.SOURCE_NAME || 'Vikidia'
+    });
 }
 
 function displayKnowledgePanel(data) {
@@ -69,28 +132,41 @@ function displayKnowledgePanel(data) {
         resultsContainer.insertBefore(panel, resultsContainer.firstChild);
     }
 
+    // Sanitize tous les champs avant insertion dans le DOM
+    const sanitize = (typeof DOMPurify !== 'undefined')
+        ? (str) => DOMPurify.sanitize(str || '', { ALLOWED_TAGS: [] })
+        : (str) => (str || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    const safeTitle = sanitize(data.title);
+    const safeSource = sanitize(data.source);
+
+    // Valide que les URLs sont bien en https pour éviter javascript: injection
+    const isSafeUrl = (u) => typeof u === 'string' && /^https?:\/\//i.test(u);
+    const safeUrl = isSafeUrl(data.url) ? data.url : '#';
+    const safeThumbnail = isSafeUrl(data.thumbnail) ? data.thumbnail : null;
+
     // Tronque l'extrait si trop long
     const maxLength = CONFIG.KNOWLEDGE_PANEL_CONFIG?.EXTRACT_LENGTH || 400;
-    let extract = data.extract;
+    let extract = sanitize(data.extract);
     if (extract.length > maxLength) {
         extract = extract.substring(0, maxLength) + '...';
     }
 
     // Construction du HTML
-    const thumbnailHTML = data.thumbnail
-        ? `<div class="panel-thumbnail"><img src="${data.thumbnail}" alt="${data.title}" style="display: block !important;"></div>`
+    const thumbnailHTML = safeThumbnail
+        ? `<div class="panel-thumbnail"><img src="${safeThumbnail}" alt="${safeTitle}" style="display: block !important;"></div>`
         : '';
 
     panel.innerHTML = `
         ${thumbnailHTML}
         <div class="panel-content">
-            <h3 class="panel-title">${data.title}</h3>
+            <h3 class="panel-title">${safeTitle}</h3>
             <p class="panel-extract">${extract}</p>
             <div class="panel-footer">
-                <a href="${data.url}" target="_blank" rel="noopener noreferrer" class="panel-link">
+                <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="panel-link">
                     ${typeof i18n !== 'undefined' ? i18n.get('readMore') : 'En savoir plus'} →
                 </a>
-                <span class="panel-source">${data.source}</span>
+                <span class="panel-source">${safeSource}</span>
             </div>
         </div>
     `;
@@ -130,10 +206,10 @@ function findBestMatch(query, searchResults) {
     const stem = (word) => {
         // Retire les pluriels et terminaisons courantes
         return word
+            .replace(/aux$/, 'al')       // pluriel: animaux → animal (avant /x$/)
+            .replace(/eux$/, 'eu')       // pluriel: cheveux → cheveu (avant /x$/)
             .replace(/s$/, '')           // pluriel: dinosaures → dinosaure
-            .replace(/x$/, '')           // pluriel: chevaux → chevau
-            .replace(/aux$/, 'al')       // pluriel: animaux → animal
-            .replace(/eux$/, 'eu')       // pluriel: cheveux → cheveu
+            .replace(/x$/, '')           // pluriel: voix → voi
             .replace(/tion$/, '')        // substantifs: révolution → révolu
             .replace(/ment$/, '')        // adverbes: rapidement → rapide
             .replace(/able$/, '')        // adjectifs: aimable → aim
@@ -141,6 +217,7 @@ function findBestMatch(query, searchResults) {
     };
 
     const queryNorm = normalizeText(query);
+    if (!queryNorm) return null;
     const queryWords = queryNorm.split(' ').filter(w => w.length > 2);
     const queryStemmed = stem(queryNorm);
 

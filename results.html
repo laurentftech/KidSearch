@@ -4,6 +4,16 @@
     <meta charset="UTF-8">
     <title>Search for Kids - Résultats</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'none';
+        script-src 'self' https://cdnjs.cloudflare.com;
+        style-src 'self' 'unsafe-inline';
+        img-src 'self' https: data: blob:;
+        connect-src 'self' https:;
+        font-src 'self';
+        form-action 'self';
+        base-uri 'self';
+        manifest-src 'self';">
     <link rel="icon" type="image/png" href="favicon.png">
     <link rel="stylesheet" href="css/style.css?v=3">
 
@@ -18,8 +28,11 @@
             integrity="sha256-QM/0krVDU6Vc35/7NpeGU5/7fVTSX5fdSh6JdbMJw10="
             crossorigin="anonymous"></script>
 
-    <!-- 4️⃣ Moteur de recherche -->
-    <script src="js/search.js?v=5"></script>
+    <!-- 4️⃣ Moteur de recherche (découpé en modules) -->
+    <script src="js/search-cache.js?v=1"></script>
+    <script src="js/search-api.js?v=1"></script>
+    <script src="js/search-utils.js?v=1"></script>
+    <script src="js/search.js?v=6"></script>
     <script src="js/voice-search.js?v=3"></script>
     <script src="js/knowledge-panels.js?v=3"></script>
 </head>
