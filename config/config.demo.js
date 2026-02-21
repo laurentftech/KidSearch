@@ -23,6 +23,9 @@ const CONFIG = {
     // Configuration pour les panneaux de connaissances
     KNOWLEDGE_PANEL_CONFIG: {
         ENABLED: true,
+        // BACKEND_URL: 'http://localhost:8082/api', // Optionnel : backend KidSearch
+        // Si BACKEND_URL est absent, les panneaux utilisent l'API Vikidia directement
+        BACKEND_URL: null,
         API_URL: 'https://{lang}.vikidia.org/w/api.php',
         BASE_URL: 'https://{lang}.vikidia.org/wiki/',
         SOURCE_NAME: "Vikidia - L'encyclopédie des 8-13 ans",

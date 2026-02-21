@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Test Knowledge Panel Relevance</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
+        .test { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px; }
+        .query { font-weight: bold; color: #1a73e8; font-size: 18px; margin-bottom: 10px; }
+        .result { margin: 8px 0; padding: 8px; background: #f5f5f5; border-radius: 4px; }
+        .score { color: #34a853; font-weight: bold; }
+        .rejected { color: #ea4335; }
+        .accepted { color: #34a853; }
+    </style>
+</head>
+<body>
+    <h1>Test de Pertinence du Panneau de Connaissances</h1>
+    <p>Ce test simule la logique de scoring pour vérifier qu'on n'affiche que les résultats pertinents.</p>
+
+    <div id="results"></div>
+
+    <script>
+    // Copie de la fonction de scoring
+    function normalizeText(text) {
+        return text.toLowerCase()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9\s]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    function findBestMatch(query, searchResults) {
+        if (!searchResults || searchResults.length === 0) {
+            return null;
+        }
+
+        const queryNorm = normalizeText(query);
+        const queryWords = queryNorm.split(' ').filter(w => w.length > 2);
+
+        const scored = searchResults.map(result => {
+            const titleNorm = normalizeText(result.title);
+            const snippetNorm = normalizeText(result.snippet || '');
+
+            let score = 0;
+
+            if (titleNorm === queryNorm) {
+                score += 100;
+            }
+
+            if (titleNorm.includes(queryNorm)) {
+                score += 50;
+            }
+
+            if (titleNorm.startsWith(queryNorm)) {
+                score += 30;
+            }
+
+            const wordsInTitle = queryWords.filter(word => titleNorm.includes(word)).length;
+            score += wordsInTitle * 10;
+
+            if (queryWords.length > 1 && wordsInTitle === queryWords.length) {
+                score += 25;
+            }
+
+            if (titleNorm.length > queryNorm.length * 3) {
+                score -= 5;
+            }
+
+            const wordsInSnippet = queryWords.filter(word => snippetNorm.includes(word)).length;
+            score += wordsInSnippet * 2;
+
+            return { result, score };
+        });
+
+        scored.sort((a, b) => b.score - a.score);
+
+        const MINIMUM_SCORE = 15;
+        if (scored[0].score < MINIMUM_SCORE) {
+            return { rejected: true, best: scored[0], all: scored };
+        }
+
+        return { rejected: false, best: scored[0], all: scored };
+    }
+
+    // Tests
+    const tests = [
+        {
+            query: "Dassault Rafale",
+            results: [
+                { title: "Tempête", snippet: "Une tempête est un phénomène météorologique..." },
+                { title: "Avion de chasse", snippet: "Un avion de chasse est un avion militaire..." },
+                { title: "Dassault Aviation", snippet: "Dassault Aviation est un constructeur aéronautique français..." }
+            ]
+        },
+        {
+            query: "dinosaures",
+            results: [
+                { title: "Dinosaure", snippet: "Les dinosaures sont des reptiles qui ont vécu..." },
+                { title: "Paléontologie", snippet: "La paléontologie étudie les fossiles..." },
+                { title: "Tyrannosaurus", snippet: "Le Tyrannosaurus rex est un grand dinosaure..." }
+            ]
+        },
+        {
+            query: "Seconde Guerre mondiale",
+            results: [
+                { title: "Seconde Guerre mondiale", snippet: "La Seconde Guerre mondiale est un conflit armé..." },
+                { title: "Guerre", snippet: "La guerre est un conflit armé..." },
+                { title: "Adolf Hitler", snippet: "Adolf Hitler était le dirigeant de l'Allemagne nazie..." }
+            ]
+        },
+        {
+            query: "photosynthèse",
+            results: [
+                { title: "Photosynthèse", snippet: "La photosynthèse est le processus par lequel les plantes..." },
+                { title: "Chlorophylle", snippet: "La chlorophylle est un pigment..." },
+                { title: "Plante", snippet: "Une plante est un organisme vivant..." }
+            ]
+        },
+        {
+            query: "Marie Curie",
+            results: [
+                { title: "Marie Curie", snippet: "Marie Curie était une physicienne et chimiste française..." },
+                { title: "Prix Nobel", snippet: "Le prix Nobel est une récompense..." },
+                { title: "Radioactivité", snippet: "La radioactivité est un phénomène physique..." }
+            ]
+        }
+    ];
+
+    const resultsDiv = document.getElementById('results');
+
+    tests.forEach(test => {
+        const match = findBestMatch(test.query, test.results);
+
+        const testDiv = document.createElement('div');
+        testDiv.className = 'test';
+
+        let html = `<div class="query">Recherche: "${test.query}"</div>`;
+
+        match.all.forEach((item, idx) => {
+            const isSelected = idx === 0;
+            html += `<div class="result">
+                ${isSelected ? '👉 ' : '　 '}
+                <strong>${item.result.title}</strong>
+                <span class="score">(score: ${item.score})</span>
+                ${isSelected && match.rejected ? '<span class="rejected"> ❌ REJETÉ (score trop faible)</span>' : ''}
+                ${isSelected && !match.rejected ? '<span class="accepted"> ✅ ACCEPTÉ</span>' : ''}
+            </div>`;
+        });
+
+        testDiv.innerHTML = html;
+        resultsDiv.appendChild(testDiv);
+    });
+    </script>
+</body>
+</html>

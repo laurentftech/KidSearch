@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Backend KidSearch</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #1a73e8;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        button {
+            background: #1a73e8;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #1557b0;
+        }
+        .results {
+            margin-top: 15px;
+        }
+        .result-item {
+            padding: 10px;
+            margin: 5px 0;
+            background: #f8f9fa;
+            border-left: 3px solid #1a73e8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Test d'intégration Backend KidSearch</h1>
+
+        <div class="test-section">
+            <h2>1. Test de santé du backend</h2>
+            <button onclick="testHealth()">Tester /api/health</button>
+            <div id="health-result"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>2. Test de statistiques</h2>
+            <button onclick="testStats()">Tester /api/stats</button>
+            <div id="stats-result"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>3. Test de recherche (MeiliSearch uniquement)</h2>
+            <input type="text" id="search-query" placeholder="Ex: dinosaures" style="padding: 8px; width: 300px;">
+            <button onclick="testSearch(false)">Rechercher (sans CSE)</button>
+            <button onclick="testSearch(true)">Rechercher (avec CSE)</button>
+            <div id="search-result"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>4. Test de l'intégration dans search.js</h2>
+            <button onclick="testSearchJsIntegration()">Tester GenericApiSource</button>
+            <div id="integration-result"></div>
+        </div>
+    </div>
+
+    <script>
+        // Backend URL - Basculer entre local et production
+        // IMPORTANT: Utiliser le proxy CORS local pour contourner les restrictions CORS
+        const BACKEND_URL = 'http://localhost:8081'; // Proxy CORS local
+        // const BACKEND_URL = 'https://kidsearch.laurentftech.fr.eu.org'; // Direct (CORS bloqué)
+        // const BACKEND_URL = 'http://localhost:8080'; // Backend local
+
+        async function testHealth() {
+            const resultDiv = document.getElementById('health-result');
+            resultDiv.innerHTML = '<div class="status info">Test en cours...</div>';
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/health`);
+                const data = await response.json();
+
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <div class="status success">✅ Backend accessible</div>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<div class="status error">❌ Erreur: ${response.status}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="status error">❌ Erreur de connexion: ${error.message}</div>
+                    <p>Le backend n'est probablement pas accessible à ${BACKEND_URL}</p>
+                `;
+            }
+        }
+
+        async function testStats() {
+            const resultDiv = document.getElementById('stats-result');
+            resultDiv.innerHTML = '<div class="status info">Test en cours...</div>';
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/stats`);
+                const data = await response.json();
+
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <div class="status success">✅ Statistiques récupérées</div>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<div class="status error">❌ Erreur: ${response.status}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="status error">❌ Erreur: ${error.message}</div>`;
+            }
+        }
+
+        async function testSearch(useCse) {
+            const query = document.getElementById('search-query').value || 'dinosaures';
+            const resultDiv = document.getElementById('search-result');
+            resultDiv.innerHTML = '<div class="status info">Recherche en cours...</div>';
+
+            try {
+                const url = `${BACKEND_URL}/api/search?q=${encodeURIComponent(query)}&lang=fr&limit=5&use_cse=${useCse}&use_reranking=true`;
+                console.log('🔍 Requête:', url);
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (response.ok) {
+                    let html = `<div class="status success">✅ Recherche réussie pour "${query}"</div>`;
+                    html += `<div><strong>Stats:</strong></div>`;
+                    html += `<pre>${JSON.stringify(data.stats, null, 2)}</pre>`;
+
+                    if (data.results && data.results.length > 0) {
+                        html += `<div class="results"><strong>${data.results.length} résultats trouvés:</strong>`;
+                        data.results.slice(0, 5).forEach((result, idx) => {
+                            html += `
+                                <div class="result-item">
+                                    <strong>${idx + 1}. ${result.title}</strong><br>
+                                    <small>${result.url}</small><br>
+                                    ${result.excerpt || result.snippet || ''}
+                                </div>
+                            `;
+                        });
+                        html += '</div>';
+                    } else {
+                        html += '<div class="status info">ℹ️ Aucun résultat trouvé (l\'index MeiliSearch est peut-être vide)</div>';
+                    }
+
+                    resultDiv.innerHTML = html;
+                } else {
+                    resultDiv.innerHTML = `<div class="status error">❌ Erreur: ${response.status}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="status error">❌ Erreur: ${error.message}</div>`;
+            }
+        }
+
+        async function testSearchJsIntegration() {
+            const resultDiv = document.getElementById('integration-result');
+            resultDiv.innerHTML = '<div class="status info">Test de l\'intégration search.js...</div>';
+
+            try {
+                // Simule ce que fait GenericApiSource.searchCustom()
+                const query = 'dinosaures';
+                const lang = 'fr';
+                const limit = 5;
+
+                const url = `${BACKEND_URL}/api/search?q=${encodeURIComponent(query)}&lang=${lang}&limit=${limit}&use_cse=true&use_reranking=true`;
+
+                console.log('🔧 Test GenericApiSource avec URL:', url);
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (response.ok) {
+                    // Simule la transformation des résultats comme dans search.js
+                    const transformedResults = data.results.map(item => ({
+                        title: item.title,
+                        link: item.url,
+                        displayLink: item.site || new URL(item.url).hostname,
+                        snippet: item.excerpt || item.snippet,
+                        htmlSnippet: item.excerpt || item.snippet,
+                        source: 'KidSearch Backend',
+                        weight: item.score || 0.95,
+                        pagemap: item.images?.length > 0 ? {
+                            cse_thumbnail: [{ src: item.images[0].url }]
+                        } : undefined
+                    }));
+
+                    let html = `<div class="status success">✅ Transformation réussie - ${transformedResults.length} résultats</div>`;
+                    html += '<div><strong>Résultats transformés (format search.js):</strong></div>';
+                    html += `<pre>${JSON.stringify(transformedResults.slice(0, 2), null, 2)}</pre>`;
+
+                    resultDiv.innerHTML = html;
+                } else {
+                    resultDiv.innerHTML = `<div class="status error">❌ Erreur: ${response.status}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="status error">❌ Erreur: ${error.message}</div>`;
+                console.error('Erreur détaillée:', error);
+            }
+        }
+
+        // Auto-test au chargement
+        window.addEventListener('load', () => {
+            console.log('🚀 Page de test chargée');
+            testHealth();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KidSearch — Tests Qualité</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.7/purify.min.js"
+            integrity="sha256-QM/0krVDU6Vc35/7NpeGU5/7fVTSX5fdSh6JdbMJw10="
+            crossorigin="anonymous"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            max-width: 900px;
+            margin: 30px auto;
+            padding: 20px;
+            background: #f8f9fa;
+            color: #202124;
+        }
+        h1 { color: #1a73e8; margin-bottom: 4px; }
+        .subtitle { color: #5f6368; margin-bottom: 24px; font-size: 14px; }
+
+        /* Barre de résumé */
+        #summary {
+            display: flex;
+            gap: 16px;
+            padding: 16px 20px;
+            border-radius: 8px;
+            background: #fff;
+            border: 1px solid #dadce0;
+            margin-bottom: 24px;
+            font-weight: 500;
+        }
+        #summary .total  { color: #202124; }
+        #summary .passed { color: #1e8e3e; }
+        #summary .failed { color: #d93025; }
+        #summary .skipped { color: #f29900; }
+        #progress {
+            height: 4px;
+            background: #dadce0;
+            border-radius: 2px;
+            margin-bottom: 24px;
+            overflow: hidden;
+        }
+        #progress-bar { height: 100%; background: #1e8e3e; width: 0; transition: width 0.3s; }
+
+        /* Suites */
+        .suite {
+            background: #fff;
+            border: 1px solid #dadce0;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+        .suite-header {
+            padding: 12px 16px;
+            font-weight: 600;
+            font-size: 15px;
+            background: #f1f3f4;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+        .suite-header:hover { background: #e8eaed; }
+        .suite-badge {
+            font-size: 12px;
+            font-weight: 500;
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+        .badge-ok  { background: #d4edda; color: #155724; }
+        .badge-err { background: #f8d7da; color: #721c24; }
+        .suite-body { display: block; }
+        .suite-body.collapsed { display: none; }
+
+        /* Tests individuels */
+        .test-case {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 10px 16px;
+            border-top: 1px solid #f1f3f4;
+            font-size: 14px;
+        }
+        .test-case:first-child { border-top: none; }
+        .test-icon { flex-shrink: 0; font-size: 16px; line-height: 1.4; }
+        .test-name { flex: 1; line-height: 1.4; }
+        .test-detail {
+            margin-top: 4px;
+            font-size: 12px;
+            color: #5f6368;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+        }
+        .test-case.fail .test-detail { color: #d93025; }
+        .test-time { flex-shrink: 0; font-size: 12px; color: #80868b; align-self: center; }
+    </style>
+</head>
+<body>
+    <h1>🧪 KidSearch — Tests Qualité</h1>
+    <p class="subtitle">Tests automatisés avec assertions — ouvrir dans un navigateur (python -m http.server 8000)</p>
+
+    <div id="progress"><div id="progress-bar"></div></div>
+
+    <div id="summary">
+        <span class="total">⏳ Exécution…</span>
+    </div>
+
+    <div id="output"></div>
+
+<script>
+// ─────────────────────────────────────────────
+// Mini test runner
+// ─────────────────────────────────────────────
+const runner = (() => {
+    const suites = [];
+    let currentSuite = null;
+    let total = 0, passed = 0, failed = 0;
+
+    function describe(name, fn) {
+        currentSuite = { name, tests: [] };
+        suites.push(currentSuite);
+        fn();
+    }
+
+    function it(name, fn) {
+        const test = { name, status: 'pending', detail: '', ms: 0 };
+        currentSuite.tests.push(test);
+        total++;
+        try {
+            const t0 = performance.now();
+            fn();
+            test.ms = Math.round(performance.now() - t0);
+            test.status = 'pass';
+            passed++;
+        } catch (e) {
+            test.status = 'fail';
+            test.detail = e.message;
+            failed++;
+        }
+    }
+
+    function assert(condition, msg) {
+        if (!condition) throw new Error(msg || 'Assertion échouée');
+    }
+
+    function assertEqual(a, b, msg) {
+        if (a !== b) throw new Error(msg || `Attendu: ${JSON.stringify(b)}\nObtenu:  ${JSON.stringify(a)}`);
+    }
+
+    function assertIncludes(str, substr, msg) {
+        if (!String(str).includes(substr))
+            throw new Error(msg || `"${str}" ne contient pas "${substr}"`);
+    }
+
+    function assertNotIncludes(str, substr, msg) {
+        if (String(str).includes(substr))
+            throw new Error(msg || `"${str}" contient "${substr}" alors qu'il ne devrait pas`);
+    }
+
+    function render() {
+        const out = document.getElementById('output');
+        out.innerHTML = '';
+
+        suites.forEach(suite => {
+            const suitePass = suite.tests.every(t => t.status === 'pass');
+            const suiteDiv = document.createElement('div');
+            suiteDiv.className = 'suite';
+
+            const header = document.createElement('div');
+            header.className = 'suite-header';
+            const failCount = suite.tests.filter(t => t.status === 'fail').length;
+            const badge = suitePass
+                ? `<span class="suite-badge badge-ok">✓ ${suite.tests.length} OK</span>`
+                : `<span class="suite-badge badge-err">✗ ${failCount} échec${failCount > 1 ? 's' : ''}</span>`;
+            header.innerHTML = `<span>${suite.name}</span>${badge}`;
+
+            const body = document.createElement('div');
+            body.className = 'suite-body' + (suitePass ? ' collapsed' : '');
+            header.addEventListener('click', () => body.classList.toggle('collapsed'));
+
+            suite.tests.forEach(t => {
+                const div = document.createElement('div');
+                div.className = `test-case ${t.status === 'fail' ? 'fail' : ''}`;
+                const icon = t.status === 'pass' ? '✅' : '❌';
+                div.innerHTML = `
+                    <span class="test-icon">${icon}</span>
+                    <span class="test-name">
+                        ${t.name}
+                        ${t.detail ? `<div class="test-detail">${t.detail}</div>` : ''}
+                    </span>
+                    <span class="test-time">${t.ms}ms</span>
+                `;
+                body.appendChild(div);
+            });
+
+            suiteDiv.appendChild(header);
+            suiteDiv.appendChild(body);
+            out.appendChild(suiteDiv);
+        });
+
+        // Résumé
+        const pct = total > 0 ? Math.round(passed / total * 100) : 0;
+        document.getElementById('progress-bar').style.width = pct + '%';
+        document.getElementById('progress-bar').style.background = failed > 0 ? '#d93025' : '#1e8e3e';
+        document.getElementById('summary').innerHTML = `
+            <span class="total">Total : ${total}</span>
+            <span class="passed">✓ ${passed} passés</span>
+            ${failed > 0 ? `<span class="failed">✗ ${failed} échoués</span>` : ''}
+        `;
+    }
+
+    return { describe, it, assert, assertEqual, assertIncludes, assertNotIncludes, render };
+})();
+
+const { describe, it, assert, assertEqual, assertIncludes, assertNotIncludes } = runner;
+
+// ─────────────────────────────────────────────
+// Fonctions copiées depuis knowledge-panels.js
+// pour les tester en isolation (sans effets de bord)
+// ─────────────────────────────────────────────
+function normalizeText(text) {
+    return text.toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function stem(word) {
+    return word
+        .replace(/aux$/, 'al')       // avant /x$/ : animaux → animal
+        .replace(/eux$/, 'eu')       // avant /x$/ : cheveux → cheveu
+        .replace(/s$/, '')
+        .replace(/x$/, '')
+        .replace(/tion$/, '')
+        .replace(/ment$/, '')
+        .replace(/able$/, '')
+        .replace(/ible$/, '');
+}
+
+function findBestMatch(query, searchResults) {
+    if (!searchResults || searchResults.length === 0) return null;
+
+    const queryNorm = normalizeText(query);
+    if (!queryNorm) return null;
+    const queryWords = queryNorm.split(' ').filter(w => w.length > 2);
+    const queryStemmed = stem(queryNorm);
+
+    const scored = searchResults.map(result => {
+        const titleNorm = normalizeText(result.title);
+        const titleStemmed = stem(titleNorm);
+        const snippetNorm = normalizeText(result.snippet || '');
+        let score = 0;
+
+        if (titleNorm === queryNorm || titleStemmed === queryStemmed) score += 100;
+        if (titleNorm.includes(queryNorm) || titleStemmed.includes(queryStemmed)) score += 50;
+        if (titleNorm.startsWith(queryNorm) || titleStemmed.startsWith(queryStemmed)) score += 30;
+
+        let wordsInTitle = 0;
+        queryWords.forEach(word => {
+            const wordStem = stem(word);
+            if (titleNorm.includes(word) || titleStemmed.includes(wordStem)) wordsInTitle++;
+        });
+        score += wordsInTitle * 10;
+
+        if (queryWords.length > 1 && wordsInTitle === queryWords.length) score += 25;
+        if (titleNorm.length > queryNorm.length * 3) score -= 5;
+
+        const wordsInSnippet = queryWords.filter(w => {
+            const ws = stem(w);
+            return snippetNorm.includes(w) || snippetNorm.includes(ws);
+        }).length;
+        score += wordsInSnippet * 2;
+
+        return { result, score };
+    });
+
+    scored.sort((a, b) => b.score - a.score);
+    const MINIMUM_SCORE = 15;
+    if (scored[0].score < MINIMUM_SCORE) return null;
+    return scored[0].result;
+}
+
+function detectQueryLanguage(query) {
+    const lq = query.toLowerCase();
+    if (/[àâçéèêëîïôûùüÿœæ]/i.test(lq) || /\b(le|la|les|un|une|des)\b/i.test(lq)) return 'fr';
+    if (/\b(the|and|for|what|who|are)\b/i.test(lq)) return 'en';
+    return null;
+}
+
+// Logique de sanitization extraite de knowledge-panels.js (après fix XSS)
+function sanitizeForPanel(str) {
+    if (typeof DOMPurify !== 'undefined') {
+        return DOMPurify.sanitize(str || '', { ALLOWED_TAGS: [] });
+    }
+    return (str || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function isSafeUrl(u) {
+    return typeof u === 'string' && /^https?:\/\//i.test(u);
+}
+
+// Logique de signature de cache extraite de search.js (après fix)
+function getConfigSignature(sources) {
+    return sources
+        .filter(s => s.enabled)
+        .map(s => `${s.id}:${s.weight || 1}`)
+        .join('|');
+}
+
+function getImageConfigSignature(sources) {
+    return sources
+        .filter(s => s.enabled && s.supportsImages)
+        .map(s => `${s.id}:${s.weight || 1}`)
+        .join('|');
+}
+
+// ─────────────────────────────────────────────
+// SUITE 1 — Scoring findBestMatch
+// ─────────────────────────────────────────────
+describe('1 · findBestMatch() — Scoring et pertinence', () => {
+
+    it('retourne null si résultats vides', () => {
+        assert(findBestMatch('dinosaures', []) === null);
+    });
+
+    it('retourne null si résultats null', () => {
+        assert(findBestMatch('dinosaures', null) === null);
+    });
+
+    it('accepte une correspondance exacte de titre', () => {
+        const results = [{ title: 'Dinosaure', snippet: '' }];
+        const match = findBestMatch('dinosaures', results);
+        assert(match !== null, 'Devrait accepter "Dinosaure" pour "dinosaures"');
+        assertEqual(match.title, 'Dinosaure');
+    });
+
+    it('accepte une correspondance de titre avec accents normalisés', () => {
+        const results = [{ title: 'Photosynthèse', snippet: '' }];
+        const match = findBestMatch('photosynthèse', results);
+        assert(match !== null);
+        assertEqual(match.title, 'Photosynthèse');
+    });
+
+    it('rejette "Tempête" pour la requête "Dassault Rafale"', () => {
+        const results = [
+            { title: 'Tempête', snippet: 'Un phénomène météorologique...' },
+            { title: 'Avion de chasse', snippet: 'Un avion militaire...' },
+        ];
+        const match = findBestMatch('Dassault Rafale', results);
+        assert(match === null, '"Tempête" ne devrait pas être retourné pour "Dassault Rafale"');
+    });
+
+    it('préfère le titre le plus spécifique parmi plusieurs candidats', () => {
+        const results = [
+            { title: 'Guerre', snippet: 'Un conflit armé...' },
+            { title: 'Seconde Guerre mondiale', snippet: 'Conflit de 1939-1945...' },
+        ];
+        const match = findBestMatch('Seconde Guerre mondiale', results);
+        assert(match !== null);
+        assertEqual(match.title, 'Seconde Guerre mondiale');
+    });
+
+    it('accepte une correspondance exacte (Marie Curie)', () => {
+        const results = [
+            { title: 'Marie Curie', snippet: 'Physicienne et chimiste française...' },
+            { title: 'Prix Nobel', snippet: 'Récompense internationale...' },
+        ];
+        const match = findBestMatch('Marie Curie', results);
+        assert(match !== null);
+        assertEqual(match.title, 'Marie Curie');
+    });
+
+    it('prend en compte le snippet pour améliorer le score', () => {
+        const weakTitle = [{ title: 'Volcans', snippet: 'Le volcan est une structure géologique qui émet de la lave' }];
+        const match = findBestMatch('volcan', weakTitle);
+        // "Volcans" correspond par stemming, snippet renforce
+        assert(match !== null);
+    });
+
+    it('gère une requête sans mots longs : pas de bonus words, mais match exact possible', () => {
+        // "le" → queryWords vide (filtré par length > 2)
+        // Mais le titre "Le" matche exactement → score 100 → panel retourné
+        const results = [{ title: 'Le', snippet: '' }];
+        const match = findBestMatch('le', results);
+        assert(match !== null, 'Match exact sur le titre même pour un mot court');
+    });
+
+    it('retourne null quand la requête courte ne matche aucun titre', () => {
+        // "go" ne correspond à rien dans les titres → score 0 < 15
+        const results = [
+            { title: 'Dinosaure', snippet: '' },
+            { title: 'Volcan', snippet: '' },
+        ];
+        const match = findBestMatch('go', results);
+        assert(match === null, 'Aucun titre ne correspond à "go"');
+    });
+});
+
+// ─────────────────────────────────────────────
+// SUITE 2 — Détection de langue
+// ─────────────────────────────────────────────
+describe('2 · detectQueryLanguage() — Détection langue', () => {
+
+    it('détecte le français via les accents', () => {
+        assertEqual(detectQueryLanguage('éruption volcanique'), 'fr');
+    });
+
+    it('détecte le français via les articles', () => {
+        assertEqual(detectQueryLanguage('les dinosaures'), 'fr');
+    });
+
+    it('détecte le français via "un"', () => {
+        assertEqual(detectQueryLanguage('un animal'), 'fr');
+    });
+
+    it('détecte l\'anglais via "the"', () => {
+        assertEqual(detectQueryLanguage('the dinosaur'), 'en');
+    });
+
+    it('détecte l\'anglais via "what"', () => {
+        assertEqual(detectQueryLanguage('what is gravity'), 'en');
+    });
+
+    it('retourne null pour un mot ambigu sans marqueurs', () => {
+        assertEqual(detectQueryLanguage('Paris'), null);
+    });
+
+    it('retourne null pour une requête numérique', () => {
+        assertEqual(detectQueryLanguage('1944'), null);
+    });
+});
+
+// ─────────────────────────────────────────────
+// SUITE 3 — Sécurité : sanitization XSS
+// ─────────────────────────────────────────────
+describe('3 · Sécurité — Sanitization XSS (DOMPurify)', () => {
+
+    it('neutralise une balise <script> dans le titre', () => {
+        const malicious = '<script>alert("xss")<\/script>Dinosaure';
+        const safe = sanitizeForPanel(malicious);
+        assertNotIncludes(safe, '<script>', 'La balise <script> doit être supprimée');
+        assertNotIncludes(safe, 'alert(', 'Le code JS doit être supprimé');
+    });
+
+    it('neutralise une balise <img onerror> dans le titre', () => {
+        const malicious = '<img src=x onerror=alert(1)>Chat';
+        const safe = sanitizeForPanel(malicious);
+        assertNotIncludes(safe, 'onerror', 'onerror ne doit pas passer');
+    });
+
+    it('neutralise du HTML dans l\'extrait', () => {
+        const malicious = '<b>gras</b><a href="evil">lien</a>texte';
+        const safe = sanitizeForPanel(malicious);
+        assertNotIncludes(safe, '<b>', 'Les balises HTML doivent être supprimées');
+        assertNotIncludes(safe, '<a ', 'Les liens HTML doivent être supprimés');
+        assertIncludes(safe, 'texte', 'Le texte utile doit être conservé');
+    });
+
+    it('conserve le texte brut sans l\'altérer', () => {
+        const plain = 'Dinosaures : animaux préhistoriques';
+        const safe = sanitizeForPanel(plain);
+        assertEqual(safe, plain);
+    });
+
+    it('gère une valeur null sans planter', () => {
+        const safe = sanitizeForPanel(null);
+        assertEqual(safe, '');
+    });
+
+    it('gère une valeur undefined sans planter', () => {
+        const safe = sanitizeForPanel(undefined);
+        assertEqual(safe, '');
+    });
+
+    it('neutralise une injection via attribut style', () => {
+        const malicious = '<p style="background:url(javascript:alert(1))">texte</p>';
+        const safe = sanitizeForPanel(malicious);
+        assertNotIncludes(safe, 'javascript:', 'javascript: ne doit pas passer dans style');
+    });
+});
+
+// ─────────────────────────────────────────────
+// SUITE 4 — Sécurité : validation des URLs
+// ─────────────────────────────────────────────
+describe('4 · Sécurité — Validation des URLs', () => {
+
+    it('accepte une URL https valide', () => {
+        assert(isSafeUrl('https://fr.vikidia.org/wiki/Dinosaure'));
+    });
+
+    it('accepte une URL http valide', () => {
+        assert(isSafeUrl('http://localhost:8000/results.html'));
+    });
+
+    it('rejette une URL javascript:', () => {
+        assert(!isSafeUrl('javascript:alert(1)'));
+    });
+
+    it('rejette une URL data:', () => {
+        assert(!isSafeUrl('data:text/html,<script>alert(1)<\/script>'));
+    });
+
+    it('rejette une chaîne vide', () => {
+        assert(!isSafeUrl(''));
+    });
+
+    it('rejette null', () => {
+        assert(!isSafeUrl(null));
+    });
+
+    it('rejette undefined', () => {
+        assert(!isSafeUrl(undefined));
+    });
+
+    it('rejette un chemin relatif', () => {
+        assert(!isSafeUrl('/wiki/Dinosaure'), 'Les chemins relatifs ne sont pas safe');
+    });
+
+    it('rejette une URL vbscript:', () => {
+        assert(!isSafeUrl('vbscript:msgbox(1)'));
+    });
+});
+
+// ─────────────────────────────────────────────
+// SUITE 5 — Signature de cache
+// ─────────────────────────────────────────────
+describe('5 · Cache — Signatures uniques (search.js)', () => {
+
+    const vikidiaOnly = [
+        { id: 'vikidia', enabled: true, weight: 1.0, supportsImages: true },
+    ];
+    const wikiOnly = [
+        { id: 'wikipedia', enabled: true, weight: 0.8, supportsImages: false },
+    ];
+    const both = [
+        { id: 'vikidia',   enabled: true, weight: 1.0, supportsImages: true },
+        { id: 'wikipedia', enabled: true, weight: 0.8, supportsImages: false },
+    ];
+    const bothDifferentWeight = [
+        { id: 'vikidia',   enabled: true, weight: 0.5, supportsImages: true },
+        { id: 'wikipedia', enabled: true, weight: 0.8, supportsImages: false },
+    ];
+
+    it('deux sources différentes → signatures différentes', () => {
+        const sig1 = getConfigSignature(vikidiaOnly);
+        const sig2 = getConfigSignature(wikiOnly);
+        assert(sig1 !== sig2, `"${sig1}" devrait ≠ "${sig2}"`);
+    });
+
+    it('même source → même signature', () => {
+        const sig1 = getConfigSignature(vikidiaOnly);
+        const sig2 = getConfigSignature(vikidiaOnly);
+        assertEqual(sig1, sig2);
+    });
+
+    it('un poids différent → signature différente', () => {
+        const sig1 = getConfigSignature(both);
+        const sig2 = getConfigSignature(bothDifferentWeight);
+        assert(sig1 !== sig2, 'Un changement de poids doit changer la signature');
+    });
+
+    it('source désactivée → exclue de la signature', () => {
+        const withDisabled = [
+            { id: 'vikidia',   enabled: true,  weight: 1.0, supportsImages: true },
+            { id: 'wikipedia', enabled: false, weight: 0.8, supportsImages: false },
+        ];
+        const sig1 = getConfigSignature(vikidiaOnly);
+        const sig2 = getConfigSignature(withDisabled);
+        assertEqual(sig1, sig2, 'La source désactivée ne doit pas modifier la signature');
+    });
+
+    it('signature image n\'inclut que les sources supportant les images', () => {
+        const sigAll  = getImageConfigSignature(both);     // vikidia only (wikipedia: supportsImages false)
+        const sigViki = getImageConfigSignature(vikidiaOnly);
+        assertEqual(sigAll, sigViki, 'Wikipedia sans supportsImages ne doit pas figurer dans la signature image');
+    });
+
+    it('signature non vide pour au moins une source active', () => {
+        const sig = getConfigSignature(vikidiaOnly);
+        assert(sig.length > 0, 'La signature ne doit pas être vide');
+    });
+
+    it('signature vide si toutes les sources sont désactivées', () => {
+        const allOff = [
+            { id: 'vikidia',   enabled: false, weight: 1.0, supportsImages: true },
+            { id: 'wikipedia', enabled: false, weight: 0.8, supportsImages: false },
+        ];
+        const sig = getConfigSignature(allOff);
+        assertEqual(sig, '', 'Signature vide si aucune source active');
+    });
+});
+
+// ─────────────────────────────────────────────
+// SUITE 6 — Normalisation de texte (stemming)
+// ─────────────────────────────────────────────
+describe('6 · Normalisation — Stemming français', () => {
+
+    it('retire le "s" du pluriel', () => {
+        assertIncludes(stem('dinosaures'), 'dinosaure');
+    });
+
+    it('retire le "x" du pluriel', () => {
+        const s = stem('voix');
+        assertNotIncludes(s, 'x');
+    });
+
+    it('normalise "animaux" → "animal"', () => {
+        assertEqual(stem('animaux'), 'animal');
+    });
+
+    it('normalise "cheveux" → "cheveu"', () => {
+        assertEqual(stem('cheveux'), 'cheveu');
+    });
+
+    it('normalise un mot en "-tion"', () => {
+        const s = stem('revolution');
+        assertNotIncludes(s, 'tion');
+    });
+
+    it('normalise un mot en "-ment"', () => {
+        const s = stem('rapidement');
+        assertNotIncludes(s, 'ment');
+    });
+
+    it('ne modifie pas un mot court sans suffixe', () => {
+        assertEqual(stem('chat'), 'chat');
+    });
+
+    it('normalise les accents avec normalizeText', () => {
+        const n = normalizeText('Éruption Volcanique');
+        assertNotIncludes(n, 'É', 'Les accents doivent être retirés');
+        assertIncludes(n, 'eruption');
+    });
+});
+
+// ─────────────────────────────────────────────
+// SUITE 7 — Cas limites et régressions
+// ─────────────────────────────────────────────
+describe('7 · Régressions & cas limites', () => {
+
+    it('findBestMatch : requête vide ne plante pas', () => {
+        const results = [{ title: 'Dinosaure', snippet: '' }];
+        // La requête vide → queryWords vide → score 0 < 15
+        const match = findBestMatch('', results);
+        assert(match === null, 'Une requête vide ne doit rien retourner');
+    });
+
+    it('findBestMatch : un seul résultat pertinent est retourné', () => {
+        const results = [{ title: 'Lune', snippet: 'Satellite naturel de la Terre' }];
+        const match = findBestMatch('Lune', results);
+        assert(match !== null);
+        assertEqual(match.title, 'Lune');
+    });
+
+    it('sanitize : conserve les apostrophes et tirets', () => {
+        const text = "L'encyclopédie des 8-13 ans";
+        const safe = sanitizeForPanel(text);
+        assertIncludes(safe, "L'encyclopédie");
+        assertIncludes(safe, '8-13');
+    });
+
+    it('isSafeUrl : URL HTTPS en majuscules', () => {
+        assert(isSafeUrl('HTTPS://example.com'), 'HTTPS majuscule doit être accepté');
+    });
+
+    it('isSafeUrl : URL avec port et chemin complexe', () => {
+        assert(isSafeUrl('https://fr.vikidia.org:443/wiki/Marie_Curie?lang=fr#section'));
+    });
+
+    it('signature de cache : ordre des sources compte', () => {
+        const order1 = [
+            { id: 'vikidia',   enabled: true, weight: 1.0 },
+            { id: 'wikipedia', enabled: true, weight: 0.8 },
+        ];
+        const order2 = [
+            { id: 'wikipedia', enabled: true, weight: 0.8 },
+            { id: 'vikidia',   enabled: true, weight: 1.0 },
+        ];
+        // Les deux configs ont les mêmes sources mais dans un ordre différent
+        // → la signature doit refléter cet ordre pour la reproductibilité
+        const sig1 = getConfigSignature(order1);
+        const sig2 = getConfigSignature(order2);
+        assert(sig1 !== sig2, "L'ordre des sources doit être reflété dans la signature");
+    });
+});
+
+// ─────────────────────────────────────────────
+// Lancement et rendu
+// ─────────────────────────────────────────────
+runner.render();
+</script>
+</body>
+</html>

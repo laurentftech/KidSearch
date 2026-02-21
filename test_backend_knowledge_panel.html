@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Backend Knowledge Panel</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #1a73e8;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #5f6368;
+            margin-bottom: 20px;
+        }
+        .config-section {
+            background: #e8f0fe;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .config-section label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        .config-section input, .config-section select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #dadce0;
+            border-radius: 4px;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #dadce0;
+            border-radius: 8px;
+        }
+        .test-section h2 {
+            margin-top: 0;
+            color: #202124;
+            font-size: 18px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .status.warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 13px;
+            border: 1px solid #dadce0;
+        }
+        button {
+            background: #1a73e8;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px 5px 5px 0;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        button:hover {
+            background: #1557b0;
+        }
+        button.secondary {
+            background: #5f6368;
+        }
+        button.secondary:hover {
+            background: #3c4043;
+        }
+        .query-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 15px 0;
+        }
+        .query-buttons button {
+            background: #fff;
+            color: #1a73e8;
+            border: 1px solid #1a73e8;
+            padding: 8px 16px;
+        }
+        .query-buttons button:hover {
+            background: #e8f0fe;
+        }
+
+        /* Knowledge Panel Styles (from knowledge-panels.js) */
+        .knowledge-panel {
+            background: #fff;
+            border: 1px solid #dfe1e5;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 20px 0;
+            display: flex;
+            gap: 16px;
+            box-shadow: 0 1px 6px rgba(32,33,36,.28);
+        }
+        .panel-thumbnail {
+            flex-shrink: 0;
+        }
+        .panel-thumbnail img {
+            width: 150px;
+            height: 150px;
+            object-fit: cover;
+            border-radius: 8px;
+        }
+        .panel-content {
+            flex: 1;
+            min-width: 0;
+        }
+        .panel-title {
+            font-size: 20px;
+            font-weight: 500;
+            color: #202124;
+            margin: 0 0 8px 0;
+        }
+        .panel-extract {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #4d5156;
+            margin: 0 0 12px 0;
+        }
+        .panel-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .panel-link {
+            color: #1a73e8;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .panel-link:hover {
+            text-decoration: underline;
+        }
+        .panel-source {
+            font-size: 12px;
+            color: #70757a;
+        }
+        @media (max-width: 768px) {
+            .knowledge-panel {
+                flex-direction: column;
+            }
+            .panel-thumbnail img {
+                width: 100%;
+                height: auto;
+                max-height: 200px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Test Backend Knowledge Panel</h1>
+        <p class="subtitle">Test l'endpoint <code>/api/knowledge-panel</code> du backend KidSearch</p>
+
+        <!-- Configuration -->
+        <div class="config-section">
+            <h3 style="margin-top: 0;">⚙️ Configuration</h3>
+            <label>
+                Backend URL:
+                <select id="backend-preset" onchange="updateBackendUrl()">
+                    <option value="https://kidsearch.laurentftech.fr.eu.org/api">Production (kidsearch.laurentftech.fr.eu.org)</option>
+                    <option value="http://localhost:8081/api">Proxy CORS Local (localhost:8081)</option>
+                    <option value="http://localhost:8080/api">Backend Local (localhost:8080)</option>
+                    <option value="custom">Custom...</option>
+                </select>
+            </label>
+            <input type="text" id="backend-url" value="https://kidsearch.laurentftech.fr.eu.org/api" placeholder="https://example.com/api">
+            <label>
+                Language:
+                <select id="language">
+                    <option value="fr" selected>Français (fr)</option>
+                    <option value="en">English (en)</option>
+                    <option value="all">All languages</option>
+                </select>
+            </label>
+        </div>
+
+        <!-- Test 1: Health Check -->
+        <div class="test-section">
+            <h2>1️⃣ Test de connectivité</h2>
+            <p>Vérifie que le backend est accessible</p>
+            <button onclick="testConnectivity()">Tester la connexion</button>
+            <div id="connectivity-result"></div>
+        </div>
+
+        <!-- Test 2: Quick Tests -->
+        <div class="test-section">
+            <h2>2️⃣ Tests rapides</h2>
+            <p>Test avec des requêtes prédéfinies:</p>
+            <div class="query-buttons">
+                <button onclick="testQuery('dinosaures')">dinosaures</button>
+                <button onclick="testQuery('Seconde Guerre mondiale')">Seconde Guerre mondiale</button>
+                <button onclick="testQuery('photosynthèse')">photosynthèse</button>
+                <button onclick="testQuery('Marie Curie')">Marie Curie</button>
+                <button onclick="testQuery('Lune')">Lune</button>
+                <button onclick="testQuery('Albert Einstein')">Albert Einstein</button>
+                <button onclick="testQuery('volcan')">volcan</button>
+            </div>
+            <div id="quick-test-result"></div>
+        </div>
+
+        <!-- Test 3: Custom Query -->
+        <div class="test-section">
+            <h2>3️⃣ Requête personnalisée</h2>
+            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
+                <input type="text" id="custom-query" placeholder="Ex: Dassault Rafale"
+                       style="flex: 1; padding: 8px; border: 1px solid #dadce0; border-radius: 4px;">
+                <button onclick="testCustomQuery()">Rechercher</button>
+            </div>
+            <div id="custom-result"></div>
+        </div>
+
+        <!-- Test 4: Visual Rendering -->
+        <div class="test-section">
+            <h2>4️⃣ Rendu visuel du panneau</h2>
+            <p>Affiche le panneau tel qu'il apparaîtra dans KidSearch</p>
+            <div id="visual-panel-container"></div>
+        </div>
+
+        <!-- Test 5: Error Cases -->
+        <div class="test-section">
+            <h2>5️⃣ Cas d'erreur</h2>
+            <p>Teste le comportement avec des requêtes qui ne devraient pas retourner de résultat:</p>
+            <div class="query-buttons">
+                <button onclick="testQuery('asdfghjkl')">Texte aléatoire</button>
+                <button onclick="testQuery('comment')">Mot trop vague</button>
+                <button onclick="testQuery('')">Requête vide</button>
+            </div>
+            <div id="error-test-result"></div>
+        </div>
+    </div>
+
+    <script>
+        let lastSuccessfulData = null;
+
+        function getBackendUrl() {
+            return document.getElementById('backend-url').value.trim();
+        }
+
+        function getLanguage() {
+            return document.getElementById('language').value;
+        }
+
+        function updateBackendUrl() {
+            const preset = document.getElementById('backend-preset').value;
+            const urlInput = document.getElementById('backend-url');
+
+            if (preset !== 'custom') {
+                urlInput.value = preset;
+                urlInput.disabled = true;
+            } else {
+                urlInput.disabled = false;
+                urlInput.focus();
+            }
+
+            // Show confirmation
+            console.log('✅ Backend URL updated to:', urlInput.value);
+
+            // Clear previous test results
+            document.getElementById('connectivity-result').innerHTML = '';
+            document.getElementById('quick-test-result').innerHTML = '';
+            document.getElementById('custom-result').innerHTML = '';
+        }
+
+        async function testConnectivity() {
+            const resultDiv = document.getElementById('connectivity-result');
+            const backendUrl = getBackendUrl();
+
+            resultDiv.innerHTML = `
+                <div class="status info">⏳ Test de connexion en cours...</div>
+                <p><small>URL utilisée: <code>${backendUrl}</code></small></p>
+            `;
+
+            try {
+                // Test the health endpoint
+                const healthUrl = backendUrl.replace('/api', '') + '/health';
+                console.log('🔍 Testing connectivity to:', healthUrl, '(from backend URL:', backendUrl, ')');
+
+                const response = await fetch(healthUrl, {
+                    method: 'GET',
+                    headers: { 'Accept': 'application/json' }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    resultDiv.innerHTML = `
+                        <div class="status success">✅ Backend accessible à ${healthUrl}</div>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="status warning">⚠️ Backend répond mais avec statut ${response.status}</div>
+                        <p>L'endpoint /health n'est peut-être pas implémenté. Continuez avec les tests suivants.</p>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="status error">❌ Impossible de se connecter au backend</div>
+                    <p><strong>Erreur:</strong> ${error.message}</p>
+                    <p><strong>URL testée:</strong> <code>${backendUrl.replace('/api', '') + '/health'}</code></p>
+                    <p>Vérifiez que:</p>
+                    <ul>
+                        <li>Si vous testez le backend de production directement, <strong>c'est normal que ça échoue (CORS bloqué)</strong></li>
+                        <li><strong>Sélectionnez "Proxy CORS Local" dans le menu déroulant</strong></li>
+                        <li>Le proxy CORS est actif (vérifiez dans le terminal)</li>
+                        <li>Le serveur HTTP local tourne sur port 8000</li>
+                    </ul>
+                `;
+            }
+        }
+
+        async function testQuery(query, targetDiv = 'quick-test-result') {
+            const resultDiv = document.getElementById(targetDiv);
+            const backendUrl = getBackendUrl();
+            const lang = getLanguage();
+
+            resultDiv.innerHTML = `<div class="status info">⏳ Recherche de knowledge panel pour "${query}"...</div>`;
+
+            try {
+                const url = `${backendUrl}/knowledge-panel?q=${encodeURIComponent(query)}&lang=${lang}`;
+                console.log('🔍 Request:', url);
+
+                const startTime = performance.now();
+                const response = await fetch(url);
+                const endTime = performance.now();
+                const responseTime = Math.round(endTime - startTime);
+
+                let html = '';
+
+                if (response.status === 404) {
+                    html = `
+                        <div class="status info">ℹ️ Aucun knowledge panel trouvé pour "${query}"</div>
+                        <p>C'est normal pour les requêtes non pertinentes ou trop vagues.</p>
+                        <p><small>Temps de réponse: ${responseTime}ms</small></p>
+                    `;
+                } else if (response.ok) {
+                    const data = await response.json();
+                    lastSuccessfulData = data;
+
+                    // Validate response format
+                    const issues = [];
+                    if (!data.title) issues.push('title manquant');
+                    if (!data.extract) issues.push('extract manquant');
+                    if (!data.url) issues.push('url manquant');
+                    if (!data.source) issues.push('source manquant');
+
+                    if (issues.length > 0) {
+                        html = `
+                            <div class="status error">⚠️ Réponse invalide - Champs manquants: ${issues.join(', ')}</div>
+                        `;
+                    } else {
+                        html = `
+                            <div class="status success">✅ Knowledge panel trouvé pour "${query}"</div>
+                            <p><small>Temps de réponse: ${responseTime}ms</small></p>
+                        `;
+                    }
+
+                    html += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+
+                    // Auto-render in visual panel
+                    renderVisualPanel(data);
+                } else {
+                    const errorText = await response.text();
+                    html = `
+                        <div class="status error">❌ Erreur ${response.status}</div>
+                        <pre>${errorText}</pre>
+                    `;
+                }
+
+                resultDiv.innerHTML = html;
+
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="status error">❌ Erreur de connexion</div>
+                    <p><strong>Erreur:</strong> ${error.message}</p>
+                    <p>Le backend n'est peut-être pas accessible à <code>${backendUrl}</code></p>
+                `;
+                console.error('Error details:', error);
+            }
+        }
+
+        function testCustomQuery() {
+            const query = document.getElementById('custom-query').value.trim();
+            if (!query) {
+                alert('Veuillez entrer une requête');
+                return;
+            }
+            testQuery(query, 'custom-result');
+        }
+
+        function renderVisualPanel(data) {
+            const container = document.getElementById('visual-panel-container');
+
+            if (!data || !data.title) {
+                container.innerHTML = '<div class="status info">Aucune donnée à afficher</div>';
+                return;
+            }
+
+            // Truncate extract (simulates frontend behavior)
+            const maxLength = 400;
+            let extract = data.extract;
+            if (extract.length > maxLength) {
+                extract = extract.substring(0, maxLength) + '...';
+            }
+
+            // Build panel HTML
+            const thumbnailHTML = data.thumbnail
+                ? `<div class="panel-thumbnail"><img src="${data.thumbnail}" alt="${data.title}"></div>`
+                : '';
+
+            container.innerHTML = `
+                <div class="knowledge-panel">
+                    ${thumbnailHTML}
+                    <div class="panel-content">
+                        <h3 class="panel-title">${data.title}</h3>
+                        <p class="panel-extract">${extract}</p>
+                        <div class="panel-footer">
+                            <a href="${data.url}" target="_blank" rel="noopener noreferrer" class="panel-link">
+                                En savoir plus →
+                            </a>
+                            <span class="panel-source">${data.source}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Error handling for image
+            if (data.thumbnail) {
+                const img = container.querySelector('.panel-thumbnail img');
+                if (img) {
+                    img.addEventListener('error', function() {
+                        this.style.display = 'none';
+                    });
+                }
+            }
+        }
+
+        // Initialize
+        window.addEventListener('load', () => {
+            console.log('🚀 Test page loaded');
+            updateBackendUrl();
+
+            // Auto-run connectivity test
+            setTimeout(testConnectivity, 500);
+        });
+
+        // Handle Enter key in custom query input
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('custom-query')?.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    testCustomQuery();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
